@@ -39,6 +39,7 @@
 4. 螢幕休眠及切到其他 App 再回來後，連線、補訊息和主持人代翻是否恢復。
 5. 四支手機共用公司 Wi-Fi 對外 IP 時，ntfy.sh 發布量及頻率限制對長會議的影響。
 6. iPhone Safari 上由 HTTPS 網頁直接使用 ntfy.sh 的 CORS 與 SSE 穩定性。
+7. iPhone 說完後約 2 秒自動送出；也要確認手動結束及系統沒有回報結束時的 5 秒保險。
 
 ## SPEC.md 第 13 節驗收結果
 
@@ -86,3 +87,9 @@ Codex 實作時（2026-11-16）的沙盒無法開瀏覽器也連不上 ntfy.sh�
 `node --check app.js` 通過；既有 `node tests/second_round_vm_test.cjs` 通過 pagehide／pageshow、補收游標、429、失敗重送、過期 listening、舊 hello、非法姓名。額外的 Node VM 在記憶體中檢查了 visible／hidden、主持人失敗句、恢復備援、語音清單與 Claude 逾時，未修改測試檔。
 
 仍需實機確認：iPhone Safari 的 bfcache 與切到其他 App 後 SSE 是否恢復、漏訊是否真的從 ntfy 補回、主持人背景返回後是否繼續代翻；iPhone／Android 的 `voiceschanged`、預設語音播音與靜音開關提示。原「需要實機測試的項目」清單仍適用。
+
+## 第三輪修正
+
+修正日期：2026-11-17。`app.js` 第 13–14、1588–1621 行：有文字的 `onresult` 重設 2 秒停頓計時器；收到 `isFinal` 立即呼叫 `stopListening()`。`app.js` 第 1484–1492、1519–1559、1623–1677 行：結束、取消、辨識錯誤及 8 秒無結果保護都清理計時器；停止後等 5 秒仍沒有 `onend` 就 `abort()`，以最終文字或最後一次 interim 送出，沒有文字則顯示 noSpeech。手動再點一次結束仍可使用。
+
+自我檢查：`node --check app.js` 通過；`node tests/third_round_vm_test.cjs` 通過 interim 停頓後自動停止並送出、`isFinal` 立即停止、5 秒後 abort 仍送出、手動停止不重複送出，並檢查計時器重設、舊計時器隔離及 abort 回呼；`node tests/second_round_vm_test.cjs` 仍通過。尚未部署，iPhone Safari 實機效果仍待清單第 7 項驗證。

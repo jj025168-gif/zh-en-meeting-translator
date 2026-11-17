@@ -10,6 +10,8 @@ const PING_MS = 120000;
 const OFFLINE_MS = 300000;
 const LISTENING_MS = 30000;
 const FALLBACK_MS = 15000;
+const SILENCE_STOP_MS = 2000;
+const STOP_END_TIMEOUT_MS = 5000;
 const MODEL_IDS = ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"];
 const STORE = {
   defaults: "hlzh-en-defaults-v1",
@@ -491,6 +493,9 @@ let recognition = null;
 let recognitionToken = 0;
 let recognitionStopping = false;
 let recognitionWatchdog = null;
+let recognitionSilenceTimer = null;
+let recognitionStopWatchdog = null;
+let recognitionFallbackText = "";
 let errorResetTimer = null;
 let wakeLock = null;
 let toastTimer = null;
@@ -1476,6 +1481,15 @@ function recognitionErrorKey(code) {
   return "recognition";
 }
 
+function clearRecognitionTimers() {
+  clearTimeout(recognitionWatchdog);
+  clearTimeout(recognitionSilenceTimer);
+  clearTimeout(recognitionStopWatchdog);
+  recognitionWatchdog = null;
+  recognitionSilenceTimer = null;
+  recognitionStopWatchdog = null;
+}
+
 function sendListening(on, id = makeId()) {
   const payload = { type: "listening", id: id, on: on };
   const promise = sendSafely(payload);
@@ -1503,10 +1517,11 @@ function sendListening(on, id = makeId()) {
 }
 
 function finishListening(text, errorKey) {
-  clearTimeout(recognitionWatchdog);
+  clearRecognitionTimers();
   recognitionToken++;
   recognition = null;
   recognitionStopping = false;
+  recognitionFallbackText = "";
   interim = "";
   if (me) claims.delete(me.id);
   sendListening(false);
@@ -1528,10 +1543,11 @@ function finishListening(text, errorKey) {
 function cancelListeningForRace() {
   if (localMode !== "listening") return;
   recognitionToken++;
-  clearTimeout(recognitionWatchdog);
+  clearRecognitionTimers();
   const active = recognition;
   recognition = null;
   recognitionStopping = false;
+  recognitionFallbackText = "";
   interim = "";
   try { if (active) active.abort(); } catch (_error) { /* Already ended. */ }
   if (me) claims.delete(me.id);
@@ -1560,37 +1576,60 @@ function startListening() {
   const token = ++recognitionToken;
   recognition = current;
   recognitionStopping = false;
+  recognitionFallbackText = "";
   current.lang = me.lang === "en" ? "en-US" : "zh-TW";
   current.interimResults = true;
   current.continuous = false;
   current.maxAlternatives = 1;
   let finalText = "";
+  let lastInterimText = "";
   let receivedResult = false;
   let failed = false;
   current.onresult = (event) => {
     if (token !== recognitionToken) return;
-    receivedResult = true;
-    clearTimeout(recognitionWatchdog);
     let final = "";
     let interimValue = "";
+    let hasFinal = false;
     for (let index = 0; index < event.results.length; index++) {
       const result = event.results[index];
+      if (result.isFinal) hasFinal = true;
       if (!result[0]) continue;
       if (result.isFinal) final += result[0].transcript;
       else interimValue += result[0].transcript;
     }
-    finalText = final.trim();
-    interim = interimValue.trim() || finalText;
+    const latestInterim = interimValue.trim();
+    const hasText = Boolean(final.trim() || latestInterim);
+    if (hasText || hasFinal) {
+      receivedResult = true;
+      clearTimeout(recognitionWatchdog);
+      recognitionWatchdog = null;
+    }
+    if (final.trim()) finalText = final.trim();
+    if (latestInterim) lastInterimText = latestInterim;
+    interim = latestInterim || finalText;
+    recognitionFallbackText = finalText || lastInterimText;
     renderStatus();
+    if (hasFinal) {
+      stopListening();
+    } else if (hasText && !recognitionStopping) {
+      clearTimeout(recognitionSilenceTimer);
+      recognitionSilenceTimer = setTimeout(() => {
+        if (token !== recognitionToken || current !== recognition || recognitionStopping) return;
+        recognitionSilenceTimer = null;
+        stopListening();
+      }, SILENCE_STOP_MS);
+    }
   };
   current.onerror = (event) => {
     if (token !== recognitionToken) return;
     failed = true;
+    clearRecognitionTimers();
     finishListening("", recognitionErrorKey(event.error));
   };
   current.onend = () => {
     if (token !== recognitionToken || failed) return;
-    finishListening(finalText, finalText ? "" : "noSpeech");
+    const text = finalText || lastInterimText;
+    finishListening(text, text ? "" : "noSpeech");
   };
   localMode = "listening";
   sendListening(true);
@@ -1602,8 +1641,11 @@ function startListening() {
     finishListening("", "recognition");
     return;
   }
+  if (token !== recognitionToken || receivedResult) return;
   recognitionWatchdog = setTimeout(() => {
     if (token !== recognitionToken || receivedResult) return;
+    clearRecognitionTimers();
+    recognitionToken++;
     try { current.abort(); } catch (_error) { /* Already stopped. */ }
     finishListening("", "noSpeech");
   }, 8000);
@@ -1611,10 +1653,27 @@ function startListening() {
 
 function stopListening() {
   if (localMode !== "listening" || !recognition || recognitionStopping) return;
+  const active = recognition;
+  const token = recognitionToken;
+  clearTimeout(recognitionWatchdog);
+  recognitionWatchdog = null;
+  clearTimeout(recognitionSilenceTimer);
+  recognitionSilenceTimer = null;
   recognitionStopping = true;
   renderStatus();
-  try { recognition.stop(); }
-  catch (_error) { finishListening("", "recognition"); }
+  try { active.stop(); }
+  catch (_error) {
+    if (token === recognitionToken) finishListening("", "recognition");
+    return;
+  }
+  if (token !== recognitionToken || active !== recognition) return;
+  recognitionStopWatchdog = setTimeout(() => {
+    if (token !== recognitionToken || active !== recognition || !recognitionStopping) return;
+    const text = recognitionFallbackText;
+    recognitionToken++;
+    try { active.abort(); } catch (_error) { /* Already stopped. */ }
+    finishListening(text, text ? "" : "noSpeech");
+  }, STOP_END_TIMEOUT_MS);
 }
 
 function submitUtterance(text, id = makeId()) {

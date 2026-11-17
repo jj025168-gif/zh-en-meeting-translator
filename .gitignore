@@ -1,0 +1,10 @@
+# 本機與系統檔
+Thumbs.db
+.DS_Store
+*.log
+
+# 本機預覽設定
+.claude/
+
+# 姊妹專案的參考副本，不屬於本專案
+reference/

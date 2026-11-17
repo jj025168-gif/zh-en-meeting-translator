@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f5f0e8">
+  <title>中英多人語音翻譯</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <main class="app-shell">
+    <section class="entry-view view" id="entryView" aria-labelledby="entryTitle">
+      <div class="entry-card">
+        <p class="eyebrow" data-i18n="appTagline">中英多人語音翻譯</p>
+        <h1 id="entryTitle">建立房間</h1>
+        <p class="entry-hint" id="entryHint">每個人用自己的手機加入同一個房間。</p>
+        <form id="entryForm" class="field-stack">
+          <label for="nameInput" data-i18n="myName">我的名字</label>
+          <input id="nameInput" name="name" type="text" maxlength="40" autocomplete="name" required placeholder="例如 Calven" data-i18n-placeholder="namePlaceholder">
+          <label for="languageSelect" data-i18n="myLanguage">我說的語言</label>
+          <select id="languageSelect" name="language">
+            <option value="zh-TW">繁體中文</option>
+            <option value="en">English</option>
+          </select>
+          <p class="form-error" id="entryError" role="alert" hidden></p>
+          <button class="primary-button entry-submit" id="entrySubmit" type="submit">建立房間</button>
+        </form>
+        <p class="entry-footnote" data-i18n="entryPrivacy">請用新房間進行每場會議，並只把連結傳給與會者。</p>
+      </div>
+    </section>
+
+    <section class="room-view view" id="roomView" aria-label="會議房間" data-i18n-aria-label="roomTitle" hidden>
+      <header class="room-header">
+        <div class="room-heading">
+          <span class="room-badge" aria-hidden="true">中 / EN</span>
+          <div class="room-heading-copy">
+            <strong data-i18n="roomTitle">會議房間</strong>
+            <small id="roomCode"></small>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="header-button members-button" id="membersButton" type="button" aria-controls="membersPanel" aria-expanded="false">
+            <span aria-hidden="true">👥</span><span id="memberCount">1</span>
+          </button>
+          <button class="header-button" id="inviteButton" type="button" aria-controls="invitePanel" aria-expanded="false" data-i18n="invite">邀請</button>
+          <button class="header-button" id="settingsButton" type="button" aria-controls="settingsView" data-i18n="settings">設定</button>
+        </div>
+      </header>
+
+      <div class="connection-row" role="status" aria-live="polite">
+        <span class="connection-dot" aria-hidden="true"></span>
+        <span id="connectionStatus" data-i18n="connecting">連線中…</span>
+      </div>
+
+      <section class="conversation" id="conversation" role="log" aria-label="對話內容" data-i18n-aria-label="conversationLabel" aria-live="polite" aria-relevant="additions text">
+        <p class="empty-conversation" id="emptyConversation" data-i18n="emptyConversation">對話會顯示在這裡。點一下下方按鈕開始說話。</p>
+      </section>
+
+      <footer class="room-controls">
+        <p class="live-status" id="liveStatus" role="status" aria-live="polite" data-i18n="ready">準備好了</p>
+        <p class="interim-text" id="interimText" aria-live="polite"></p>
+        <form class="typing-panel" id="typingPanel" hidden>
+          <label for="typingInput" data-i18n="typeSentence">輸入一句話</label>
+          <textarea id="typingInput" rows="2" placeholder="輸入一句話" data-i18n-placeholder="typePlaceholder"></textarea>
+          <div class="typing-actions">
+            <button class="secondary-button" id="typingCancel" type="button" data-i18n="cancel">取消</button>
+            <button class="primary-button" id="typingSend" type="submit" data-i18n="send">送出</button>
+          </div>
+        </form>
+        <div class="talk-actions">
+          <button class="icon-button" id="typeButton" type="button" aria-label="改用鍵盤輸入" title="改用鍵盤輸入" data-i18n-aria-label="typeButtonLabel" data-i18n-title="typeButtonLabel">⌨</button>
+          <button class="talk-button" id="talkButton" type="button" data-i18n="tapToTalk">點一下說話</button>
+          <button class="icon-button audio-button" id="audioButton" type="button" aria-label="本機播放開關" title="本機播放開關" aria-pressed="true" data-i18n-aria-label="audioButtonLabel" data-i18n-title="audioButtonLabel">🔊</button>
+        </div>
+      </footer>
+    </section>
+
+    <section class="settings-view view" id="settingsView" aria-labelledby="settingsTitle" hidden>
+      <header class="subpage-header">
+        <button class="back-button" id="settingsClose" type="button" aria-label="返回房間" data-i18n-aria-label="backToRoom">‹</button>
+        <h2 id="settingsTitle" data-i18n="settings">設定</h2>
+      </header>
+      <form id="settingsForm" class="settings-form">
+        <fieldset class="settings-group">
+          <legend data-i18n="profile">我的身分</legend>
+          <label for="settingsName" data-i18n="myName">我的名字</label>
+          <input id="settingsName" type="text" maxlength="40" required>
+          <label for="settingsLanguage" data-i18n="myLanguage">我說的語言</label>
+          <select id="settingsLanguage">
+            <option value="zh-TW">繁體中文</option>
+            <option value="en">English</option>
+          </select>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend data-i18n="displayAndAudio">顯示與播放</legend>
+          <label for="fontSize" data-i18n="textSize">對話字體大小</label>
+          <div class="range-row"><input id="fontSize" type="range" min="22" max="42" step="1" value="24"><output id="fontSizeValue" for="fontSize">24 px</output></div>
+          <label class="check-row" for="playbackSetting"><input id="playbackSetting" type="checkbox" checked><span data-i18n="playTranslations">自動念出譯文</span></label>
+          <label for="voiceZh" data-i18n="chineseVoice">中文聲音</label>
+          <div class="voice-row"><select id="voiceZh"><option value="" data-i18n="automatic">自動</option></select><button class="secondary-button" id="previewZh" type="button" data-i18n="preview">試聽</button></div>
+          <label for="rateZh" data-i18n="chineseRate">中文語速</label>
+          <div class="range-row"><input id="rateZh" type="range" min="0.5" max="1.5" step="0.05" value="0.9"><output id="rateZhValue" for="rateZh">0.9×</output></div>
+          <label for="voiceEn" data-i18n="englishVoice">英文聲音</label>
+          <div class="voice-row"><select id="voiceEn"><option value="" data-i18n="automatic">自動</option></select><button class="secondary-button" id="previewEn" type="button" data-i18n="preview">試聽</button></div>
+          <label for="rateEn" data-i18n="englishRate">英文語速</label>
+          <div class="range-row"><input id="rateEn" type="range" min="0.5" max="1.5" step="0.05" value="0.9"><output id="rateEnValue" for="rateEn">0.9×</output></div>
+          <p class="field-note voice-warning" id="voiceWarning" role="status" hidden></p>
+          <p class="field-note" id="wakeLockNotice" data-i18n="wakeLockNote">若裝置不支援保持螢幕開啟，請手動避免休眠。</p>
+        </fieldset>
+
+        <fieldset class="settings-group" id="hostSettings" hidden>
+          <legend data-i18n="hostTranslation">主持人翻譯設定</legend>
+          <label for="apiKey" data-i18n="claudeApiKey">Claude API 金鑰</label>
+          <input id="apiKey" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…">
+          <p class="field-note" data-i18n="keyNote">金鑰只存在這台裝置，請勿在共用手機上保存。</p>
+          <label for="modelSelect" data-i18n="model">模型</label>
+          <select id="modelSelect">
+            <option value="claude-opus-5-5">Claude Opus 5.5</option>
+            <option value="claude-sonnet-5-5">Claude Sonnet 5.5</option>
+            <option value="claude-haiku-5-5">Claude Haiku 5.5</option>
+          </select>
+          <label for="extraInstructions" data-i18n="translationNotes">補充說明與固定譯法</label>
+          <textarea id="extraInstructions" rows="3" placeholder="人名、補習班名稱、常用術語…" data-i18n-placeholder="translationNotesPlaceholder"></textarea>
+          <button class="secondary-button" id="testTranslation" type="button" data-i18n="testTranslation">測試翻譯</button>
+          <p class="test-result" id="testResult" role="status" aria-live="polite"></p>
+        </fieldset>
+
+        <fieldset class="settings-group">
+          <legend data-i18n="otherSettings">其他</legend>
+          <label for="mymemoryEmail" data-i18n="mymemoryEmail">MyMemory 電子郵件（選填）</label>
+          <input id="mymemoryEmail" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com">
+          <p class="field-note" data-i18n="mymemoryNote">免費翻譯備援會使用此信箱申請較高額度。</p>
+          <div class="history-actions">
+            <button class="secondary-button" id="exportButton" type="button" data-i18n="exportHistory">複製對話紀錄</button>
+            <button class="danger-button" id="clearHistoryButton" type="button" data-i18n="clearHistory">清空這台裝置的紀錄</button>
+          </div>
+        </fieldset>
+        <div class="settings-bottom-actions">
+          <button class="primary-button" id="settingsSave" type="submit" data-i18n="saveSettings">儲存設定</button>
+          <button class="text-button" id="leaveButton" type="button" data-i18n="leaveRoom">離開房間</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel-backdrop" id="membersPanel" role="dialog" aria-modal="true" aria-labelledby="membersTitle" hidden>
+      <div class="panel-card">
+        <div class="panel-heading"><h2 id="membersTitle" data-i18n="members">成員</h2><button class="close-button" id="membersClose" type="button" aria-label="關閉" data-i18n-aria-label="close">×</button></div>
+        <div class="members-list" id="membersList"></div>
+      </div>
+    </section>
+
+    <section class="panel-backdrop" id="invitePanel" role="dialog" aria-modal="true" aria-labelledby="inviteTitle" hidden>
+      <div class="panel-card">
+        <div class="panel-heading"><h2 id="inviteTitle" data-i18n="invitePeople">邀請其他人</h2><button class="close-button" id="inviteClose" type="button" aria-label="關閉" data-i18n-aria-label="close">×</button></div>
+        <p class="field-note" data-i18n="inviteHint">把這個連結傳給與會者：</p>
+        <p class="invite-link" id="inviteLink"></p>
+        <button class="primary-button" id="inviteShare" type="button" data-i18n="shareLink">分享連結</button>
+      </div>
+    </section>
+
+    <section class="panel-backdrop unlock-backdrop" id="unlockOverlay" role="dialog" aria-modal="true" aria-labelledby="unlockTitle" hidden>
+      <div class="panel-card unlock-card">
+        <h2 id="unlockTitle" data-i18n="resumeRoom">回到房間</h2>
+        <p data-i18n="unlockHint">重新整理後，點一下繼續，讓手機準備好播放語音。</p>
+        <button class="primary-button" id="unlockButton" type="button" data-i18n="tapToContinue">點一下繼續</button>
+      </div>
+    </section>
+
+    <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  </main>
+</body>
+</html>
